@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>제주버스</title>
+<style>
+  :root{
+    --bg:#F5F6F8; --surface:#FFFFFF; --border:#E4E8EB; --border2:#EEF0F2;
+    --text:#12181D; --text2:#5B6670; --text3:#98A1A8;
+    --accent:#0D7F84; --accent-dark:#0A6569; --accent-soft:#E3F3F2;
+    --accent2:#E8622C; --accent2-soft:#FDEAE0; --accent2-text:#8A3707;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
+    font-family:'Noto Sans KR', -apple-system, BlinkMacSystemFont, sans-serif;
+    -webkit-tap-highlight-color:transparent;}
+  a{color:inherit;text-decoration:none;}
+  button{font-family:inherit;cursor:pointer;border:none;background:none;}
+  input{font-family:inherit;}
+  .app-shell{max-width:480px;margin:0 auto;min-height:100vh;background:var(--bg);
+    position:relative;padding-bottom:env(safe-area-inset-bottom);}
+  .screen{display:none;flex-direction:column;min-height:100vh;}
+  .screen.active{display:flex;}
+
+  /* ---------- 공통 ---------- */
+  .topbar{display:flex;align-items:center;gap:12px;padding:20px 20px 12px 20px;}
+  .icon-btn{width:34px;height:34px;border-radius:10px;background:var(--surface);
+    border:1px solid var(--border);display:flex;align-items:center;justify-content:center;
+    flex-shrink:0;}
+  .topbar-title{font-size:15.5px;font-weight:800;}
+  .toast{position:fixed;left:50%;bottom:32px;transform:translateX(-50%) translateY(20px);
+    background:#12181D;color:#fff;padding:12px 18px;border-radius:12px;font-size:13.5px;
+    font-weight:600;opacity:0;transition:opacity .2s, transform .2s;pointer-events:none;
+    z-index:999;max-width:86%;text-align:center;}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+  .loading, .empty{padding:40px 20px;text-align:center;color:var(--text2);font-size:14px;}
+
+  /* ---------- 홈 화면 ---------- */
+  #screen-home .header{padding:28px 20px 12px 20px;display:flex;flex-direction:column;gap:4px;}
+  .brand{display:flex;align-items:center;gap:10px;}
+  .brand-mark{width:38px;height:38px;border-radius:11px;background:var(--accent);
+    display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .brand-name{font-size:23px;font-weight:900;letter-spacing:-0.3px;}
+  .tagline{font-size:13.5px;color:var(--text2);margin-left:48px;}
+
+  .search-card{margin:14px 20px 0 20px;background:var(--surface);border:1px solid var(--border);
+    border-radius:18px;padding:18px;display:flex;flex-direction:column;gap:12px;}
+  .field{display:flex;flex-direction:column;gap:6px;position:relative;}
+  .field label{font-size:12.5px;font-weight:700;color:var(--text2);}
+  .field-input{display:flex;align-items:center;gap:8px;border:1.5px solid var(--border);
+    border-radius:12px;padding:11px 12px;background:#FAFBFC;}
+  .field-input input{flex:1;border:none;outline:none;background:transparent;font-size:15px;color:var(--text);
+    min-width:0;}
+  .field-input input::placeholder{color:var(--text3);}
+  .swap-row{display:flex;justify-content:flex-end;margin:-10px 4px -6px 0;}
+  .swap-btn{width:34px;height:34px;border-radius:10px;border:1.5px solid var(--border);
+    background:var(--surface);display:flex;align-items:center;justify-content:center;}
+  .loc-btn{display:flex;align-items:center;gap:6px;align-self:flex-start;color:var(--accent);
+    font-size:13px;font-weight:700;padding:2px 0;}
+  .btn-primary{display:flex;align-items:center;justify-content:center;gap:8px;height:50px;
+    border-radius:13px;background:var(--accent);color:#fff;font-size:16px;font-weight:700;
+    margin-top:4px;}
+  .btn-primary:disabled{opacity:.5;}
+  .btn-outline{display:flex;align-items:center;justify-content:center;height:46px;border-radius:12px;
+    background:var(--surface);color:var(--accent);border:1.5px solid var(--accent);font-size:14.5px;
+    font-weight:700;}
+  .btn-filled{display:flex;align-items:center;justify-content:center;height:46px;border-radius:12px;
+    background:var(--accent);color:#fff;font-size:14.5px;font-weight:700;}
+
+  .suggest-list{position:absolute;top:100%;left:0;right:0;margin-top:4px;background:var(--surface);
+    border:1px solid var(--border);border-radius:14px;box-shadow:0 6px 20px rgba(18,24,29,.12);
+    max-height:240px;overflow-y:auto;z-index:20;display:none;}
+  .suggest-list.show{display:block;}
+  .suggest-item{display:flex;flex-direction:column;gap:2px;padding:11px 14px;border-bottom:1px solid var(--border2);}
+  .suggest-item:last-child{border-bottom:none;}
+  .suggest-item .name{font-size:14px;font-weight:600;}
+  .suggest-item .addr{font-size:11.5px;color:var(--text2);}
+
+  .feature-box{margin:22px 20px 24px 20px;background:var(--accent-soft);border-radius:16px;
+    padding:16px 18px;display:flex;flex-direction:column;gap:9px;}
+  .feature-box .title{font-size:13.5px;font-weight:800;color:var(--accent-dark);}
+  .feature-row{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);}
+
+  /* ---------- 결과 화면 ---------- */
+  .weather-banner{display:flex;align-items:center;gap:10px;background:var(--accent2-soft);
+    border-radius:13px;padding:11px 14px;margin:0 20px 16px 20px;font-size:12.5px;
+    color:var(--accent2-text);font-weight:600;}
+
+  .route-list{padding:0 20px 24px 20px;display:flex;flex-direction:column;gap:14px;}
+  .route-card{background:var(--surface);border:1px solid var(--border);border-radius:18px;
+    padding:16px;display:flex;flex-direction:column;gap:12px;}
+  .route-card.recommended{border:1.5px solid var(--accent);}
+  .route-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .badge-rec{font-size:11px;font-weight:800;color:#fff;background:var(--accent);
+    padding:3px 8px;border-radius:999px;}
+  .badge-line{font-size:11.5px;font-weight:700;color:var(--text);background:var(--border2);
+    padding:4px 9px;border-radius:999px;}
+  .route-time{margin-left:auto;font-size:19px;font-weight:900;}
+  .bar{display:flex;width:100%;height:8px;border-radius:999px;overflow:hidden;background:var(--border2);}
+  .bar-bus{height:100%;background:var(--accent);}
+  .bar-walk{height:100%;background:#C2C9CE;}
+  .bar-legend{display:flex;justify-content:space-between;font-size:11.5px;color:var(--text2);}
+  .route-meta{display:flex;gap:14px;font-size:12px;color:var(--text2);flex-wrap:wrap;}
+
+  /* ---------- 상세 화면 ---------- */
+  #detail-map{height:184px;border-radius:16px;background:#DCEEE9;}
+  .map-wrap{padding:0 20px;}
+  .summary-card{margin:14px 20px;background:var(--surface);border:1px solid var(--border);
+    border-radius:16px;padding:15px 16px;display:flex;flex-direction:column;gap:8px;}
+  .summary-top{display:flex;align-items:baseline;justify-content:space-between;}
+  .summary-total{font-size:20px;font-weight:900;}
+  .summary-eta{font-size:12.5px;color:var(--text2);font-weight:600;}
+  .summary-sub{font-size:12.5px;color:var(--text2);}
+  .weather-line{display:flex;align-items:center;gap:7px;margin-top:2px;padding-top:9px;
+    border-top:1px solid var(--border2);font-size:12px;color:var(--accent2-text);font-weight:600;}
+
+  .timeline{padding:6px 20px 10px 20px;}
+  .tl-row{display:flex;gap:12px;}
+  .tl-icon-col{display:flex;flex-direction:column;align-items:center;}
+  .tl-icon{width:30px;height:30px;border-radius:999px;display:flex;align-items:center;
+    justify-content:center;flex-shrink:0;}
+  .tl-icon.gray{background:var(--border2);}
+  .tl-icon.bus{background:var(--accent);}
+  .tl-icon.transfer{background:var(--accent2);}
+  .tl-line{width:2px;flex:1;min-height:26px;background:var(--border);}
+  .tl-body{flex:1;padding-bottom:16px;}
+  .tl-title{font-size:14px;font-weight:700;display:flex;align-items:center;gap:7px;flex-wrap:wrap;}
+  .tl-sub{font-size:12px;color:var(--text2);margin-top:2px;}
+  .tl-tag{font-size:10px;font-weight:700;color:var(--accent-dark);background:var(--accent-soft);
+    padding:2px 6px;border-radius:999px;}
+  .tl-transfer-box{background:var(--accent2-soft);border-radius:12px;padding:10px 12px;}
+  .tl-transfer-box .tl-title{color:var(--accent2-text);font-weight:800;}
+  .tl-transfer-box .tl-sub{color:var(--accent2-text);}
+
+  .bottom-bar{margin-top:auto;position:sticky;bottom:0;background:var(--surface);
+    border-top:1px solid var(--border);padding:14px 20px 20px 20px;display:flex;
+    flex-direction:column;gap:8px;}
+  .bottom-note{font-size:11px;color:var(--text3);text-align:center;}
+
+  /* ---------- 길안내 화면 ---------- */
+  #guide-map{height:340px;width:100%;background:#DCEEE9;}
+  .guide-topbar{position:absolute;top:18px;left:18px;right:18px;display:flex;align-items:center;
+    gap:10px;z-index:5;}
+  .guide-chip{background:var(--surface);border-radius:11px;padding:8px 14px;font-size:12.5px;
+    font-weight:700;box-shadow:0 1px 4px rgba(18,24,29,.15);}
+  .guide-sheet{flex:1;background:var(--surface);border-radius:20px 20px 0 0;margin-top:-18px;
+    position:relative;padding:20px 20px 22px 20px;display:flex;flex-direction:column;gap:14px;
+    z-index:2;}
+  .grabber{width:38px;height:4px;border-radius:999px;background:var(--border);align-self:center;}
+  .alert-banner{display:flex;gap:12px;align-items:flex-start;background:var(--accent2);
+    border-radius:16px;padding:16px;}
+  .alert-banner.calm{background:var(--accent);}
+  .alert-icon{width:36px;height:36px;border-radius:999px;background:rgba(255,255,255,.2);
+    display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .alert-title{font-size:15px;font-weight:900;color:#fff;}
+  .alert-sub{font-size:12.5px;color:rgba(255,255,255,.85);margin-top:3px;}
+  .progress-row{display:flex;align-items:center;gap:8px;}
+  .p-dot{width:9px;height:9px;border-radius:999px;background:var(--border);flex-shrink:0;}
+  .p-dot.done{background:var(--accent);}
+  .p-dot.now{background:var(--accent2);}
+  .p-line{flex:1;height:3px;background:var(--border);border-radius:999px;}
+  .p-line.done{background:var(--accent);}
+  .current-card{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--border);
+    border-radius:14px;}
+  .eta-row{display:flex;align-items:baseline;justify-content:space-between;padding-top:2px;}
+  .eta-label{font-size:11.5px;color:var(--text2);font-weight:600;}
+  .eta-big{font-size:22px;font-weight:900;margin-top:2px;}
+  .end-link{text-align:center;font-size:12.5px;color:var(--text3);font-weight:600;margin-top:2px;}
+</style>
+</head>
+<body>
+<div class="app-shell">
+
+  <!-- ======================= 홈 화면 ======================= -->
+  <section id="screen-home" class="screen active">
+    <div class="header">
+      <div class="brand">
+        <div class="brand-mark">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="6" width="16" height="10" rx="2"/><path d="M4 11h16"/><circle cx="8" cy="18" r="1.5"/><circle cx="16" cy="18" r="1.5"/><path d="M7 6V4h10v2"/></svg>
+        </div>
+        <div class="brand-name">제주버스</div>
+      </div>
+      <div class="tagline">도보부터 환승까지, 제주 버스를 더 똑똑하게</div>
+    </div>
+
+    <div class="search-card">
+      <div class="field">
+        <label for="origin-input">출발지</label>
+        <div class="field-input">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0D7F84" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-7.5-7-12a7 7 0 0 1 14 0c0 4.5-7 12-7 12z"/><circle cx="12" cy="9" r="2.5"/></svg>
+          <input id="origin-input" type="text" placeholder="예: 제주국제공항" autocomplete="off">
+        </div>
+        <div id="origin-suggest" class="suggest-list"></div>
+      </div>
+
+      <div class="swap-row">
+        <button class="swap-btn" id="swap-btn" aria-label="출발지와 도착지 바꾸기">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5B6670" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v13M8 16l-3.5-3.5M8 16l3.5-3.5"/><path d="M16 21V8M16 8l3.5 3.5M16 8l-3.5 3.5"/></svg>
+        </button>
+      </div>
+
+      <div class="field">
+        <label for="dest-input">도착지</label>
+        <div class="field-input">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#E8622C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-7.5-7-12a7 7 0 0 1 14 0c0 4.5-7 12-7 12z"/><circle cx="12" cy="9" r="2.5"/></svg>
+          <input id="dest-input" type="text" placeholder="예: 성산일출봉" autocomplete="off">
+        </div>
+        <div id="dest-suggest" class="suggest-list"></div>
+      </div>
+
+      <button class="loc-btn" id="use-location-btn">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#0D7F84" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+        현재 위치로 출발지 설정
+      </button>
+
+      <button class="btn-primary" id="search-btn">경로 찾기</button>
+    </div>
+
+    <div class="feature-box">
+      <div class="title">이 앱만의 기능</div>
+      <div class="feature-row">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#0D7F84" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l4 4 10-10"/></svg>
+        환승 정류장이 가까워지면 알림
+      </div>
+      <div class="feature-row">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#0D7F84" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l4 4 10-10"/></svg>
+        도착지 날씨로 우산 필요 여부 확인
+      </div>
+      <div class="feature-row">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#0D7F84" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l4 4 10-10"/></svg>
+        버스+도보 시간을 나눠서 한눈에
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= 결과 화면 ======================= -->
+  <section id="screen-results" class="screen">
+    <div class="topbar">
+      <button class="icon-btn" id="results-back" aria-label="뒤로 가기">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#12181D" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <div>
+        <div class="topbar-title" id="results-title">경로 검색 결과</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:1px;" id="results-sub"></div>
+      </div>
+    </div>
+    <div id="results-list" class="route-list"><div class="loading">경로를 찾고 있어요...</div></div>
+  </section>
+
+  <!-- ======================= 상세 화면 ======================= -->
+  <section id="screen-detail" class="screen">
+    <div class="topbar">
+      <button class="icon-btn" id="detail-back" aria-label="뒤로 가기">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#12181D" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <div class="topbar-title">경로 상세</div>
+    </div>
+    <div class="map-wrap"><div id="detail-map"></div></div>
+    <div class="summary-card">
+      <div class="summary-top">
+        <div class="summary-total" id="summary-total">-</div>
+        <div class="summary-eta" id="summary-eta">-</div>
+      </div>
+      <div class="summary-sub" id="summary-sub">-</div>
+      <div class="weather-line" id="weather-line">날씨 확인 중...</div>
+    </div>
+    <div class="timeline" id="timeline"></div>
+    <div class="bottom-bar">
+      <div class="bottom-note">예상 도착시간이며, 버스의 실시간 위치 정보는 아니에요</div>
+      <button class="btn-primary" id="start-guide-btn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="#fff" stroke="none"><path d="M6 3l14 9-14 9V3z"/></svg>
+        길안내 시작
+      </button>
+    </div>
+  </section>
+
+  <!-- ======================= 길안내 화면 ======================= -->
+  <section id="screen-guide" class="screen" style="position:relative;">
+    <div id="guide-map"></div>
+    <div class="guide-topbar">
+      <button class="icon-btn" id="guide-close" aria-label="길안내 닫기">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#12181D" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+      <div class="guide-chip" id="guide-line-chip">길안내 중</div>
+    </div>
+    <div class="guide-sheet">
+      <div class="grabber"></div>
+      <div class="alert-banner calm" id="guide-alert">
+        <div class="alert-icon">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 10a6 6 0 0 1 12 0c0 4 1.5 5.5 1.5 5.5H4.5S6 14 6 10z"/><path d="M10 18a2 2 0 0 0 4 0"/></svg>
+        </div>
+        <div>
+          <div class="alert-title" id="guide-alert-title">경로를 안내하고 있어요</div>
+          <div class="alert-sub" id="guide-alert-sub">위치 확인 중...</div>
+        </div>
+      </div>
+
+      <div class="progress-row" id="progress-row"></div>
+
+      <div class="current-card">
+        <div class="tl-icon bus" style="flex-shrink:0;">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="6" width="16" height="10" rx="2"/><path d="M4 11h16"/><circle cx="8" cy="18" r="1.5"/><circle cx="16" cy="18" r="1.5"/></svg>
+        </div>
+        <div style="flex:1;">
+          <div style="font-size:13.5px;font-weight:700;" id="guide-current-title">이동 중</div>
+          <div style="font-size:12px;color:var(--text2);margin-top:1px;" id="guide-current-sub"></div>
+        </div>
+      </div>
+
+      <div class="eta-row">
+        <div>
+          <div class="eta-label" id="guide-dest-label">목적지</div>
+          <div class="eta-big" id="guide-eta">-</div>
+        </div>
+        <div style="text-align:right;">
+          <div class="eta-label">도착 예정</div>
+          <div style="font-size:17px;font-weight:800;margin-top:2px;" id="guide-arrival-clock">-</div>
+        </div>
+      </div>
+
+      <button class="end-link" id="guide-end-btn">길안내 종료</button>
+    </div>
+  </section>
+
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script src="//dapi.kakao.com/v2/maps/sdk.js?appkey=1c2960f3d4b9b2924e9e7e73dc55b16e&libraries=services&autoload=false"></script>
+<script>
+/* ============================================================
+   제주버스 - 설정
+   ============================================================ */
+// 본인 Cloudflare Worker 주소로 이미 연결되어 있어요.
+var WORKER_BASE = 'https://jejubus.holder1796.workers.dev';
+
+/* ============================================================
+   상태
+   ============================================================ */
+var state = {
+  origin: null,      // {lat, lng, name}
+  destination: null,
+  routes: [],
+  selectedIndex: 0,
+  detailMap: null,
+  guideMap: null,
+  guideMarker: null,
+  watchId: null,
+  transferPoint: null // {lat, lng} 환승 하차 지점 (없으면 null)
+};
+var placesSvc = null;
+var geocoderSvc = null;
+
+/* ============================================================
+   공통 유틸
+   ============================================================ */
+function $(id){ return document.getElementById(id); }
+
+function showToast(msg){
+  var t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(showToast._timer);
+  showToast._timer = setTimeout(function(){ t.classList.remove('show'); }, 2600);
+}
+
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(function(s){ s.classList.remove('active'); });
+  $(id).classList.add('active');
+  window.scrollTo(0,0);
+}
+
+function formatDuration(sec){
+  var m = Math.max(1, Math.round(sec/60));
+  var h = Math.floor(m/60);
+  var mm = m % 60;
+  if(h > 0) return h + '시간' + (mm>0 ? ' ' + mm + '분' : '');
+  return mm + '분';
+}
+
+function formatClock(date){
+  var h = date.getHours();
+  var m = date.getMinutes();
+  return (h<10?'0':'')+h + ':' + (m<10?'0':'')+m;
+}
+
+function haversine(a, b){
+  var R = 6371000;
+  var toRad = function(d){ return d * Math.PI / 180; };
+  var dLat = toRad(b.lat - a.lat);
+  var dLng = toRad(b.lng - a.lng);
+  var la1 = toRad(a.lat), la2 = toRad(b.lat);
+  var h = Math.sin(dLat/2)*Math.sin(dLat/2) +
+          Math.cos(la1)*Math.cos(la2)*Math.sin(dLng/2)*Math.sin(dLng/2);
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+/* ============================================================
+   카카오맵 SDK 로드 후 초기화
+   ============================================================ */
+kakao.maps.load(function(){
+  placesSvc = new kakao.maps.services.Places();
+  geocoderSvc = new kakao.maps.services.Geocoder();
+  initUi();
+});
+
+function initUi(){
+  setupAutocomplete($('origin-input'), $('origin-suggest'), function(place){ state.origin = place; });
+  setupAutocomplete($('dest-input'), $('dest-suggest'), function(place){ state.destination = place; });
+
+  $('use-location-btn').addEventListener('click', useCurrentLocation);
+  $('swap-btn').addEventListener('click', swapOriginDest);
+  $('search-btn').addEventListener('click', searchRoutes);
+
+  $('results-back').addEventListener('click', function(){ showScreen('screen-home'); });
+  $('detail-back').addEventListener('click', function(){ showScreen('screen-results'); });
+
+  $('start-guide-btn').addEventListener('click', startGuide);
+  $('guide-close').addEventListener('click', endGuide);
+  $('guide-end-btn').addEventListener('click', endGuide);
+}
+
+/* ============================================================
+   장소 검색 (카카오 키워드 검색)
+   ============================================================ */
+function setupAutocomplete(inputEl, listEl, onSelect){
+  var timer = null;
+  inputEl.addEventListener('input', function(){
+    var q = inputEl.value.trim();
+    clearTimeout(timer);
+    if(q.length < 2){ listEl.classList.remove('show'); listEl.innerHTML=''; return; }
+    timer = setTimeout(function(){
+      placesSvc.keywordSearch(q, function(data, status){
+        if(status !== kakao.maps.services.Status.OK){
+          listEl.innerHTML = '<div class="suggest-item"><div class="name">검색 결과가 없어요</div></div>';
+          listEl.classList.add('show');
+          return;
+        }
+        var top = data.slice(0, 6);
+        listEl.innerHTML = top.map(function(p, i){
+          return '<div class="suggest-item" data-i="'+i+'"><div class="name">'+p.place_name+'</div>'+
+                 '<div class="addr">'+(p.road_address_name || p.address_name || '')+'</div></div>';
+        }).join('');
+        listEl.classList.add('show');
+        listEl.querySelectorAll('.suggest-item').forEach(function(el){
+          el.addEventListener('click', function(){
+            var p = top[parseInt(el.dataset.i,10)];
+            inputEl.value = p.place_name;
+            onSelect({ lat: parseFloat(p.y), lng: parseFloat(p.x), name: p.place_name });
+            listEl.classList.remove('show');
+          });
+        });
+      });
+    }, 280);
+  });
+  inputEl.addEventListener('blur', function(){
+    setTimeout(function(){ listEl.classList.remove('show'); }, 150);
+  });
+}
+
+function useCurrentLocation(){
+  if(!navigator.geolocation){ showToast('이 기기에서는 위치 확인이 안 돼요'); return; }
+  showToast('현재 위치를 확인하고 있어요...');
+  navigator.geolocation.getCurrentPosition(function(pos){
+    var lat = pos.coords.latitude, lng = pos.coords.longitude;
+    state.origin = { lat: lat, lng: lng, name: '현재 위치' };
+    geocoderSvc.coord2Address(lng, lat, function(result, status){
+      if(status === kakao.maps.services.Status.OK && result[0]){
+        var addr = result[0].road_address ? result[0].road_address.address_name : result[0].address.address_name;
+        $('origin-input').value = addr;
+        state.origin.name = addr;
+      } else {
+        $('origin-input').value = '현재 위치';
+      }
+    });
+  }, function(){
+    showToast('위치 권한을 확인해주세요');
+  }, { enableHighAccuracy:true, timeout:8000 });
+}
+
+function swapOriginDest(){
+  var tmp = state.origin;
+  state.origin = state.destination;
+  state.destination = tmp;
+  var oi = $('origin-input').value, di = $('dest-input').value;
+  $('origin-input').value = di;
+  $('dest-input').value = oi;
+}
+
+/* ============================================================
+   경로 검색
+   ============================================================ */
+function searchRoutes(){
+  if(!state.origin || !state.destination){
+    showToast('출발지와 도착지를 목록에서 선택해주세요');
+    return;
+  }
+  showScreen('screen-results');
+  $('results-title').textContent = (state.origin.name||'출발') + ' → ' + (state.destination.name||'도착');
+  $('results-sub').textContent = '';
+  $('results-list').innerHTML = '<div class="loading">경로를 찾고 있어요...</div>';
+
+  var url = WORKER_BASE + '/api/route?start_x=' + state.origin.lng + '&start_y=' + state.origin.lat +
+            '&end_x=' + state.destination.lng + '&end_y=' + state.destination.lat;
+
+  fetch(url).then(function(r){ return r.json(); }).then(function(data){
+    if(data.status !== 'OK' || !data.routes || data.routes.length === 0){
+      $('results-list').innerHTML = '<div class="empty">경로를 찾지 못했어요. 정류장에서 가까운 장소로 다시 검색해보세요.</div>';
+      return;
+    }
+    state.routes = data.routes.slice().sort(function(a,b){
+      return a.properties.totalTime - b.properties.totalTime;
+    });
+    $('results-sub').textContent = '경로 ' + state.routes.length + '개';
+    renderResults();
+  }).catch(function(){
+    $('results-list').innerHTML = '<div class="empty">경로 검색 중 문제가 발생했어요. 잠시 후 다시 시도해주세요.</div>';
+  });
+}
+
+function busLinesOf(route){
+  return route.steps.filter(function(s){ return s.properties.type === 'BUS'; })
+    .map(function(s){
+      if(s.properties.vehicles && s.properties.vehicles.length){
+        return s.properties.vehicles[0].name;
+      }
+      return (s.properties.guidance||'').split(' ')[0];
+    });
+}
+function sumTimeByType(route, type){
+  return route.steps.filter(function(s){ return s.properties.type === type; })
+    .reduce(function(sum,s){ return sum + s.properties.time; }, 0);
+}
+
+function renderResults(){
+  var html = state.routes.map(function(route, idx){
+    var p = route.properties;
+    var busTime = sumTimeByType(route, 'BUS');
+    var walkTime = sumTimeByType(route, 'WALKING');
+    var total = p.totalTime || (busTime+walkTime);
+    var busPct = total ? Math.round(busTime/total*100) : 100;
+    var lines = busLinesOf(route);
+    var lineBadges = lines.map(function(l){ return '<span class="badge-line">'+l+'</span>'; }).join('');
+    var fare = (p.fare && p.fare.value) ? p.fare.value.toLocaleString('ko-KR')+'원' : '요금 정보 없음';
+    return (
+      '<div class="route-card'+(idx===0?' recommended':'')+'" data-idx="'+idx+'">' +
+        '<div class="route-head">' +
+          (idx===0 ? '<span class="badge-rec">추천</span>' : '') +
+          lineBadges +
+          '<span class="route-time">'+formatDuration(total)+'</span>' +
+        '</div>' +
+        '<div>' +
+          '<div class="bar"><div class="bar-bus" style="width:'+busPct+'%"></div><div class="bar-walk" style="width:'+(100-busPct)+'%"></div></div>' +
+          '<div class="bar-legend"><span>버스 '+formatDuration(busTime)+'</span><span>도보 '+formatDuration(walkTime)+'</span></div>' +
+        '</div>' +
+        '<div class="route-meta"><span>환승 '+p.transfers+'회</span><span>'+fare+'</span></div>' +
+        '<button class="'+(idx===0?'btn-filled':'btn-outline')+' select-route-btn" data-idx="'+idx+'">이 경로로 이동하기</button>' +
+      '</div>'
+    );
+  }).join('');
+  $('results-list').innerHTML = html;
+  document.querySelectorAll('.select-route-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      state.selectedIndex = parseInt(btn.dataset.idx, 10);
+      showDetail();
+    });
+  });
+}
+
+/* ============================================================
+   상세 화면
+   ============================================================ */
+function findTransferPoint(route){
+  var steps = route.steps;
+  for(var i=1;i<steps.length-1;i++){
+    if(steps[i].properties.type === 'WALKING'){
+      var pts = steps[i].path && steps[i].path.points;
+      if(pts && pts.length){
+        return { lat: pts[0][1], lng: pts[0][0] };
+      }
+    }
+  }
+  return null;
+}
+
+function showDetail(){
+  var route = state.routes[state.selectedIndex];
+  showScreen('screen-detail');
+
+  var p = route.properties;
+  var busTime = sumTimeByType(route, 'BUS');
+  var walkTime = sumTimeByType(route, 'WALKING');
+  var total = p.totalTime || (busTime+walkTime);
+  var now = new Date();
+  var arrival = new Date(now.getTime() + total*1000);
+
+  $('summary-total').textContent = '총 ' + formatDuration(total);
+  $('summary-eta').textContent = formatClock(arrival) + ' 도착 예정';
+  $('summary-sub').textContent = '버스 ' + formatDuration(busTime) + ' · 도보 ' + formatDuration(walkTime) + ' · 환승 ' + p.transfers + '회';
+
+  state.transferPoint = findTransferPoint(route);
+
+  buildTimeline(route, now);
+  initDetailMap(route);
+  fetchWeather();
+}
+
+function buildTimeline(route, now){
+  var steps = route.steps;
+  var cursor = new Date(now.getTime());
+  var html = '';
+  steps.forEach(function(step, i){
+    var pr = step.properties;
+    var isFirst = i===0, isLast = i===steps.length-1;
+    var startT = new Date(cursor.getTime());
+    cursor = new Date(cursor.getTime() + (pr.time||0)*1000);
+    var endT = new Date(cursor.getTime());
+    var showLine = !isLast;
+
+    if(pr.type === 'WALKING'){
+      var isTransfer = !isFirst && !isLast;
+      var distTxt = pr.distance ? Math.round(pr.distance)+'m' : '';
+      if(isTransfer){
+        html += '<div class="tl-row">' +
+          '<div class="tl-icon-col"><div class="tl-icon transfer">'+walkIcon('#fff')+'</div>' + (showLine?'<div class="tl-line"></div>':'') + '</div>' +
+          '<div class="tl-body"><div class="tl-transfer-box">' +
+            '<div class="tl-title">환승 이동 · 도보 '+formatDuration(pr.time)+(distTxt?' · '+distTxt:'')+'</div>' +
+            '<div class="tl-sub">'+formatClock(endT)+'까지 환승 정류장으로 이동</div>' +
+          '</div></div></div>';
+      } else {
+        var label = isFirst ? '정류장까지 도보 '+formatDuration(pr.time)+(distTxt?' · '+distTxt:'') :
+                               '도착지까지 도보 '+formatDuration(pr.time)+(distTxt?' · '+distTxt:'');
+        var sub = isFirst ? (stepFirstStop(step)||'정류장')+' 도착 예정 '+formatClock(endT) :
+                             '도착 예정 '+formatClock(endT);
+        html += '<div class="tl-row">' +
+          '<div class="tl-icon-col"><div class="tl-icon gray">'+walkIcon('#5B6670')+'</div>' + (showLine?'<div class="tl-line"></div>':'') + '</div>' +
+          '<div class="tl-body"><div class="tl-title">'+label+'</div><div class="tl-sub">'+sub+'</div></div></div>';
+      }
+    } else if(pr.type === 'BUS'){
+      var boardStop = stepFirstStop(step) || '정류장';
+      var alightStop = stepLastStop(step) || '하차 정류장';
+      var lineName = (pr.vehicles && pr.vehicles.length) ? pr.vehicles[0].name : (pr.guidance||'').split(' ')[0];
+      html += '<div class="tl-row">' +
+        '<div class="tl-icon-col"><div class="tl-icon bus">'+busIcon()+'</div>' + (showLine?'<div class="tl-line"></div>':'') + '</div>' +
+        '<div class="tl-body">' +
+          '<div class="tl-title">'+lineName+'번 버스 승차 <span class="tl-tag">예상</span></div>' +
+          '<div class="tl-sub">'+boardStop+' 승차 → '+alightStop+' 하차 · '+formatDuration(pr.time)+' 소요</div>' +
+        '</div></div>';
+    } else {
+      // SUBWAY 등 기타 구간은 도보와 유사하게 표시
+      html += '<div class="tl-row">' +
+        '<div class="tl-icon-col"><div class="tl-icon gray">'+busIcon()+'</div>' + (showLine?'<div class="tl-line"></div>':'') + '</div>' +
+        '<div class="tl-body"><div class="tl-title">이동 · '+formatDuration(pr.time)+'</div></div></div>';
+    }
+  });
+  $('timeline').innerHTML = html;
+}
+
+function stepFirstStop(step){ return step.properties.stops && step.properties.stops.length ? step.properties.stops[0].name : null; }
+function stepLastStop(step){ return step.properties.stops && step.properties.stops.length ? step.properties.stops[step.properties.stops.length-1].name : null; }
+
+function walkIcon(color){
+  return '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="'+color+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="9" cy="7" rx="2.2" ry="3.2" transform="rotate(-15 9 7)"/><ellipse cx="15" cy="16" rx="2.2" ry="3.2" transform="rotate(15 15 16)"/></svg>';
+}
+function busIcon(){
+  return '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="6" width="16" height="10" rx="2"/><path d="M4 11h16"/><circle cx="8" cy="18" r="1.5"/><circle cx="16" cy="18" r="1.5"/></svg>';
+}
+
+/* ============================================================
+   지도
+   ============================================================ */
+function drawRouteOnMap(map, route){
+  var bounds = new kakao.maps.LatLngBounds();
+  route.steps.forEach(function(step){
+    var pts = step.path && step.path.points;
+    if(!pts || !pts.length) return;
+    var path = pts.map(function(pt){ return new kakao.maps.LatLng(pt[1], pt[0]); });
+    path.forEach(function(ll){ bounds.extend(ll); });
+    var isWalk = step.properties.type === 'WALKING';
+    new kakao.maps.Polyline({
+      map: map, path: path, strokeWeight: isWalk?4:5,
+      strokeColor: isWalk ? '#8FB9AE' : '#0D7F84',
+      strokeOpacity: 0.9, strokeStyle: isWalk ? 'shortdash' : 'solid'
+    });
+  });
+  if(state.origin){
+    new kakao.maps.Marker({ map: map, position: new kakao.maps.LatLng(state.origin.lat, state.origin.lng) });
+    bounds.extend(new kakao.maps.LatLng(state.origin.lat, state.origin.lng));
+  }
+  if(state.destination){
+    new kakao.maps.Marker({ map: map, position: new kakao.maps.LatLng(state.destination.lat, state.destination.lng) });
+    bounds.extend(new kakao.maps.LatLng(state.destination.lat, state.destination.lng));
+  }
+  if(!bounds.isEmpty()) map.setBounds(bounds);
+}
+
+function initDetailMap(route){
+  var container = $('detail-map');
+  var center = new kakao.maps.LatLng(state.origin.lat, state.origin.lng);
+  state.detailMap = new kakao.maps.Map(container, { center: center, level: 7 });
+  drawRouteOnMap(state.detailMap, route);
+  setTimeout(function(){ if(state.detailMap) state.detailMap.relayout(); }, 120);
+}
+
+/* ============================================================
+   날씨
+   ============================================================ */
+function fetchWeather(){
+  var dest = state.destination;
+  var el = $('weather-line');
+  el.textContent = '날씨 확인 중...';
+  var url = WORKER_BASE + '/api/weather?lat=' + dest.lat + '&lon=' + dest.lng;
+  fetch(url).then(function(r){ return r.json(); }).then(function(data){
+    var items = data.response && data.response.body && data.response.body.items && data.response.body.items.item;
+    if(!items || !items.length){ el.textContent = '날씨 정보를 가져오지 못했어요'; return; }
+    var targetDate = items[0].fcstDate, targetTime = items[0].fcstTime;
+    var bucket = items.filter(function(it){ return it.fcstDate===targetDate && it.fcstTime===targetTime; });
+    function get(cat){ var f = bucket.filter(function(b){ return b.category===cat; })[0]; return f ? f.fcstValue : null; }
+    var pty = get('PTY'), pop = get('POP'), tmp = get('TMP');
+    var msg;
+    if(pty && pty !== '0'){ msg = '비나 눈 소식이 있어요, 우산을 챙기세요'; }
+    else if(pop && parseInt(pop,10) >= 60){ msg = '비 올 가능성 '+pop+'%, 우산을 챙기는 게 좋겠어요'; }
+    else { msg = '우산 없이 다녀오셔도 좋아요'; }
+    el.innerHTML = (tmp!==null ? '<strong>'+tmp+'°C</strong> · ' : '') + msg;
+  }).catch(function(){
+    el.textContent = '날씨 정보를 가져오지 못했어요';
+  });
+}
+
+/* ============================================================
+   길안내
+   ============================================================ */
+function startGuide(){
+  var route = state.routes[state.selectedIndex];
+  showScreen('screen-guide');
+
+  var lines = busLinesOf(route);
+  $('guide-line-chip').textContent = '길안내 중' + (lines.length ? ' · ' + lines[0] + '번' : '');
+  $('guide-dest-label').textContent = '목적지 · ' + (state.destination.name || '도착지');
+
+  var p = route.properties;
+  var total = p.totalTime || (sumTimeByType(route,'BUS')+sumTimeByType(route,'WALKING'));
+  var arrival = new Date(Date.now() + total*1000);
+  $('guide-arrival-clock').textContent = formatClock(arrival);
+  $('guide-eta').textContent = '도착까지 ' + formatDuration(total);
+  $('guide-current-title').textContent = lines.length ? lines[0]+'번 버스 이동 중' : '이동 중';
+  $('guide-current-sub').textContent = state.transferPoint ? '환승 정류장으로 접근하면 알려드릴게요' : '환승 없는 경로예요';
+
+  if(!state.transferPoint){
+    $('guide-alert-title').textContent = '경로를 안내하고 있어요';
+    $('guide-alert-sub').textContent = '이 경로는 환승이 없어요. 도착까지 편하게 이동하세요';
+  } else {
+    $('guide-alert-title').textContent = '경로를 안내하고 있어요';
+    $('guide-alert-sub').textContent = '환승 정류장에 가까워지면 알려드릴게요';
+  }
+
+  var center = new kakao.maps.LatLng(state.origin.lat, state.origin.lng);
+  state.guideMap = new kakao.maps.Map($('guide-map'), { center: center, level: 6 });
+  drawRouteOnMap(state.guideMap, route);
+  setTimeout(function(){ if(state.guideMap) state.guideMap.relayout(); }, 120);
+
+  if(navigator.geolocation){
+    state.watchId = navigator.geolocation.watchPosition(onGuidePosition, function(){
+      showToast('위치 정보를 가져올 수 없어요');
+    }, { enableHighAccuracy:true, maximumAge:5000, timeout:12000 });
+  } else {
+    showToast('이 기기에서는 위치 확인이 안 돼요');
+  }
+}
+
+function onGuidePosition(pos){
+  var cur = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+  var ll = new kakao.maps.LatLng(cur.lat, cur.lng);
+  if(!state.guideMarker){
+    state.guideMarker = new kakao.maps.Marker({ map: state.guideMap, position: ll, zIndex: 10 });
+  } else {
+    state.guideMarker.setPosition(ll);
+  }
+  state.guideMap.panTo(ll);
+
+  if(state.transferPoint){
+    var d = haversine(cur, state.transferPoint);
+    var banner = $('guide-alert');
+    if(d < 300){
+      banner.classList.remove('calm');
+      $('guide-alert-title').textContent = '환승 정류장에 거의 도착했어요';
+      $('guide-alert-sub').textContent = '내려서 환승 정류장으로 이동하세요';
+    } else if(d < 900){
+      banner.classList.remove('calm');
+      $('guide-alert-title').textContent = '환승 정류장이 가까워지고 있어요';
+      $('guide-alert-sub').textContent = '약 ' + Math.round(d) + 'm 남았어요, 내릴 준비를 해주세요';
+    } else {
+      banner.classList.add('calm');
+      $('guide-alert-title').textContent = '경로를 안내하고 있어요';
+      $('guide-alert-sub').textContent = '환승 정류장까지 약 ' + Math.round(d) + 'm';
+    }
+  }
+}
+
+function endGuide(){
+  if(state.watchId !== null && navigator.geolocation){
+    navigator.geolocation.clearWatch(state.watchId);
+    state.watchId = null;
+  }
+  state.guideMarker = null;
+  state.guideMap = null;
+  showScreen('screen-home');
+}
+</script>
+</body>
+</html>
