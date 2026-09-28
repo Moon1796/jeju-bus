@@ -114,6 +114,19 @@
   .summary-sub{font-size:12.5px;color:var(--text2);}
   .weather-line{display:flex;align-items:center;gap:7px;margin-top:2px;padding-top:9px;
     border-top:1px solid var(--border2);font-size:12px;color:var(--accent2-text);font-weight:600;}
+  .drive-compare{display:none;align-items:center;gap:7px;margin-top:2px;padding-top:9px;
+    border-top:1px solid var(--border2);font-size:12px;color:var(--text2);font-weight:600;}
+  .drive-compare.show{display:flex;}
+
+  /* ---------- 관광지 프리셋 ---------- */
+  .preset-wrap{margin-top:2px;}
+  .preset-label{font-size:12px;font-weight:700;color:var(--text2);margin-bottom:7px;}
+  .preset-row{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px;-webkit-overflow-scrolling:touch;}
+  .preset-row::-webkit-scrollbar{display:none;}
+  .preset-chip{flex-shrink:0;padding:8px 14px;border-radius:999px;border:1px solid var(--border);
+    background:var(--surface);color:var(--text);font-size:12.5px;font-weight:600;white-space:nowrap;
+    font-family:inherit;}
+  .preset-chip:active{background:var(--accent-soft);border-color:var(--accent);color:var(--accent-dark);}
 
   .timeline{padding:6px 20px 10px 20px;}
   .tl-row{display:flex;gap:12px;}
@@ -213,6 +226,20 @@
         <div id="dest-suggest" class="suggest-list"></div>
       </div>
 
+      <div class="preset-wrap">
+        <div class="preset-label">인기 관광지로 바로 설정</div>
+        <div class="preset-row">
+          <button type="button" class="preset-chip" data-place="성산일출봉">성산일출봉</button>
+          <button type="button" class="preset-chip" data-place="한라산국립공원">한라산</button>
+          <button type="button" class="preset-chip" data-place="협재해수욕장">협재해수욕장</button>
+          <button type="button" class="preset-chip" data-place="오설록 티뮤지엄">오설록</button>
+          <button type="button" class="preset-chip" data-place="산굼부리">산굼부리</button>
+          <button type="button" class="preset-chip" data-place="카멜리아힐">카멜리아힐</button>
+          <button type="button" class="preset-chip" data-place="만장굴">만장굴</button>
+          <button type="button" class="preset-chip" data-place="중문관광단지">중문관광단지</button>
+        </div>
+      </div>
+
       <button class="loc-btn" id="use-location-btn">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#0D7F84" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
         현재 위치로 출발지 설정
@@ -268,6 +295,7 @@
       </div>
       <div class="summary-sub" id="summary-sub">-</div>
       <div class="weather-line" id="weather-line">날씨 확인 중...</div>
+      <div class="drive-compare" id="drive-compare"></div>
     </div>
     <div class="timeline" id="timeline"></div>
     <div class="bottom-bar">
@@ -419,6 +447,12 @@ function haversine(a, b){
           Math.cos(la1)*Math.cos(la2)*Math.sin(dLng/2)*Math.sin(dLng/2);
   return 2 * R * Math.asin(Math.sqrt(h));
 }
+function estimateDriveMinutes(a, b){
+  // 카카오의 정식 자동차 길찾기 API는 개인 개발자에게 열려있지 않아서,
+  // 직선거리에 도로 보정값(1.3배)과 제주 평균 주행속도(40km/h)를 적용한 대략적인 추정치예요.
+  var km = (haversine(a, b) / 1000) * 1.3;
+  return Math.max(5, Math.round(km / 40 * 60));
+}
 
 /* ============================================================
    카카오맵 SDK 로드 후 초기화
@@ -448,6 +482,27 @@ function initUi(){
   $('start-guide-btn').addEventListener('click', startGuide);
   $('guide-close').addEventListener('click', endGuide);
   $('guide-end-btn').addEventListener('click', endGuide);
+
+  document.querySelectorAll('.preset-chip').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      selectPresetDestination(btn.getAttribute('data-place'));
+    });
+  });
+}
+
+function selectPresetDestination(query){
+  placesSvc.keywordSearch(query, function(data, status){
+    if(status === kakao.maps.services.Status.OK && data.length){
+      var d = data[0];
+      state.destination = { lat: parseFloat(d.y), lng: parseFloat(d.x), name: d.place_name };
+      $('dest-input').value = d.place_name;
+      $('dest-suggest').classList.remove('show');
+      $('dest-suggest').innerHTML = '';
+      showToast(d.place_name + ' 을(를) 도착지로 설정했어요');
+    } else {
+      showToast('장소를 찾지 못했어요');
+    }
+  });
 }
 
 /* ============================================================
@@ -520,6 +575,22 @@ function swapOriginDest(){
 /* ============================================================
    경로 검색
    ============================================================ */
+function isNightBusRunningNow(){
+  // 제주 심야버스는 대략 22:00~다음날 00:49에 운행돼요. 여유를 두고 21:00~다음날 02:00를
+  // "운행 시간대"로 보고, 그 밖의 시간에는 심야버스 경로를 추천에서 제외해요.
+  var now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
+  var h = now.getHours();
+  return h >= 21 || h < 2;
+}
+function routeUsesUnavailableNightBus(route){
+  if(isNightBusRunningNow()) return false;
+  return route.steps.some(function(s){
+    if(s.properties.type !== 'BUS') return false;
+    var name = (s.properties.vehicles && s.properties.vehicles.length) ? s.properties.vehicles[0].name : (s.properties.guidance || '');
+    return name.indexOf('심야') !== -1;
+  });
+}
+
 function searchRoutes(){
   if(!state.origin || !state.destination){
     showToast('출발지와 도착지를 목록에서 선택해주세요');
@@ -538,7 +609,13 @@ function searchRoutes(){
       $('results-list').innerHTML = '<div class="empty">경로를 찾지 못했어요. 정류장에서 가까운 장소로 다시 검색해보세요.</div>';
       return;
     }
-    state.routes = data.routes.slice().sort(function(a,b){
+    var available = data.routes.filter(function(r){ return !routeUsesUnavailableNightBus(r); });
+    if(available.length === 0){
+      $('results-list').innerHTML = '<div class="empty">지금 시간에는 이용 가능한 경로가 없어요. 심야버스로만 연결되는 경로라 제외했어요.</div>';
+      $('results-sub').textContent = '';
+      return;
+    }
+    state.routes = available.sort(function(a,b){
       return a.properties.totalTime - b.properties.totalTime;
     });
     $('results-sub').textContent = '경로 ' + state.routes.length + '개';
@@ -635,6 +712,15 @@ function showDetail(){
   $('summary-total').textContent = '총 ' + formatDuration(total);
   $('summary-eta').textContent = formatClock(arrival) + ' 도착 예정';
   $('summary-sub').textContent = '버스 ' + formatDuration(busTime) + ' · 도보 ' + formatDuration(walkTime) + ' · 환승 ' + p.transfers + '회';
+
+  var driveEl = $('drive-compare');
+  if(state.origin && state.destination){
+    var driveMin = estimateDriveMinutes(state.origin, state.destination);
+    driveEl.innerHTML = '자차로는 약 ' + driveMin + '분 <span style="color:var(--text3);font-weight:500;">(직선거리 기준 추정치예요)</span>';
+    driveEl.classList.add('show');
+  } else {
+    driveEl.classList.remove('show');
+  }
 
   state.transferPoint = findTransferPoint(route);
 
