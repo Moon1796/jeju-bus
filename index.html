@@ -346,8 +346,12 @@ var state = {
   detailMap: null,
   guideMap: null,
   guideMarker: null,
+  guideMarkerLine: null,
   watchId: null,
-  transferPoint: null // {lat, lng} 환승 하차 지점 (없으면 null)
+  transferPoint: null, // {lat, lng} 환승 하차 지점 (없으면 null)
+  busLines: [],
+  transferNear: false,
+  transferCrossed: false
 };
 var placesSvc = null;
 var geocoderSvc = null;
@@ -663,14 +667,39 @@ function stepLastStop(step){ return step.properties.stops && step.properties.sto
 function walkIcon(color){
   return '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="'+color+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="9" cy="7" rx="2.2" ry="3.2" transform="rotate(-15 9 7)"/><ellipse cx="15" cy="16" rx="2.2" ry="3.2" transform="rotate(15 15 16)"/></svg>';
 }
-function busIcon(){
-  return '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="6" width="16" height="10" rx="2"/><path d="M4 11h16"/><circle cx="8" cy="18" r="1.5"/><circle cx="16" cy="18" r="1.5"/></svg>';
+function busIcon(size){
+  size = size || 15;
+  return '<svg width="'+size+'" height="'+size+'" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">' +
+    '<rect x="2.5" y="4.5" width="19" height="13" rx="2.5"/>' +
+    '<path d="M2.5 10.2h19"/>' +
+    '<path d="M7 4.5v5.7M12 4.5v5.7M17 4.5v5.7"/>' +
+    '<path d="M2.5 14.3h19"/>' +
+    '<circle cx="7" cy="19.3" r="1.8" fill="#fff" stroke="none"/>' +
+    '<circle cx="17" cy="19.3" r="1.8" fill="#fff" stroke="none"/>' +
+    '</svg>';
+}
+function transferPinHtml(){
+  return '<div style="width:34px;height:42px;">' +
+    '<svg width="34" height="42" viewBox="0 0 34 42">' +
+      '<path d="M17 0C7.6 0 0 7.6 0 17c0 12 15 23.6 16.1 24.5.5.4 1.3.4 1.8 0C19 40.6 34 29 34 17 34 7.6 26.4 0 17 0z" fill="#E8622C"/>' +
+      '<circle cx="17" cy="16.5" r="12" fill="#FFFFFF"/>' +
+      '<text x="17" y="20.3" font-size="10.5" font-weight="800" fill="#C1490C" text-anchor="middle">환승</text>' +
+    '</svg>' +
+  '</div>';
+}
+function busMarkerHtml(lineNum){
+  return '<div style="position:relative;width:36px;height:36px;">' +
+    '<div style="width:36px;height:36px;border-radius:999px;background:#0D7F84;border:3px solid #FFFFFF;box-shadow:0 2px 6px rgba(18,24,29,0.35);display:flex;align-items:center;justify-content:center;">' +
+      busIcon(19) +
+    '</div>' +
+    (lineNum ? '<div style="position:absolute;left:50%;bottom:-9px;transform:translateX(-50%);background:#12181D;color:#fff;font-size:10.5px;font-weight:800;padding:2px 7px;border-radius:999px;white-space:nowrap;border:1.5px solid #fff;box-shadow:0 1px 3px rgba(18,24,29,0.3);">'+lineNum+'번</div>' : '') +
+  '</div>';
 }
 
 /* ============================================================
    지도
    ============================================================ */
-var BUS_COLORS = ['#0D7F84', '#1B6FCB', '#7C5CBF', '#C1490C'];
+var BUS_COLORS = ['#0D7F84', '#D6336C', '#5B3FD9', '#B8860B'];
 
 function drawRouteOnMap(map, route){
   var bounds = new kakao.maps.LatLngBounds();
@@ -703,9 +732,9 @@ function drawRouteOnMap(map, route){
     if(isTransferWalk){
       var transferOverlay = new kakao.maps.CustomOverlay({
         position: path[0],
-        content: '<div style="background:#E8622C;color:#fff;font-size:11px;font-weight:800;padding:4px 9px;border-radius:999px;box-shadow:0 1px 4px rgba(18,24,29,0.3);white-space:nowrap;">환승</div>',
-        yAnchor: 1.9,
-        zIndex: 8
+        content: transferPinHtml(),
+        yAnchor: 1,
+        zIndex: 9
       });
       transferOverlay.setMap(map);
     }
@@ -762,6 +791,10 @@ function startGuide(){
   showScreen('screen-guide');
 
   var lines = busLinesOf(route);
+  state.busLines = lines;
+  state.transferNear = false;
+  state.transferCrossed = false;
+  state.guideMarkerLine = null;
   $('guide-line-chip').textContent = '길안내 중' + (lines.length ? ' · ' + lines[0] + '번' : '');
   $('guide-dest-label').textContent = '목적지 · ' + (state.destination.name || '도착지');
 
@@ -798,20 +831,43 @@ function startGuide(){
 function onGuidePosition(pos){
   var cur = { lat: pos.coords.latitude, lng: pos.coords.longitude };
   var ll = new kakao.maps.LatLng(cur.lat, cur.lng);
+  var d = state.transferPoint ? haversine(cur, state.transferPoint) : null;
+
+  if(d !== null){
+    if(d < 70) state.transferNear = true;
+    if(state.transferNear && !state.transferCrossed && d > 150){
+      state.transferCrossed = true;
+      var nextLine = state.busLines[1];
+      $('guide-current-title').textContent = nextLine ? nextLine+'번 버스 이동 중' : '이동 중';
+      $('guide-current-sub').textContent = '환승을 완료했어요';
+      $('guide-line-chip').textContent = '길안내 중' + (nextLine ? ' · '+nextLine+'번' : '');
+    }
+  }
+  var legIndex = state.transferCrossed ? 1 : 0;
+  var currentLine = state.busLines[legIndex] || state.busLines[0] || '';
+
   if(!state.guideMarker){
+    state.guideMarkerLine = currentLine;
     state.guideMarker = new kakao.maps.CustomOverlay({
       map: state.guideMap, position: ll, zIndex: 10, yAnchor: 0.5,
-      content: '<div style="width:32px;height:32px;border-radius:999px;background:#0D7F84;border:3px solid #FFFFFF;box-shadow:0 2px 6px rgba(18,24,29,0.35);display:flex;align-items:center;justify-content:center;">' + busIcon() + '</div>'
+      content: busMarkerHtml(currentLine)
     });
   } else {
     state.guideMarker.setPosition(ll);
+    if(currentLine !== state.guideMarkerLine){
+      state.guideMarkerLine = currentLine;
+      state.guideMarker.setContent(busMarkerHtml(currentLine));
+    }
   }
   state.guideMap.panTo(ll);
 
-  if(state.transferPoint){
-    var d = haversine(cur, state.transferPoint);
+  if(d !== null){
     var banner = $('guide-alert');
-    if(d < 300){
+    if(state.transferCrossed){
+      banner.classList.add('calm');
+      $('guide-alert-title').textContent = '환승을 완료했어요';
+      $('guide-alert-sub').textContent = '목적지까지 편하게 이동하세요';
+    } else if(d < 300){
       banner.classList.remove('calm');
       $('guide-alert-title').textContent = '환승 정류장에 거의 도착했어요';
       $('guide-alert-sub').textContent = '내려서 환승 정류장으로 이동하세요';
@@ -833,7 +889,10 @@ function endGuide(){
     state.watchId = null;
   }
   state.guideMarker = null;
+  state.guideMarkerLine = null;
   state.guideMap = null;
+  state.transferNear = false;
+  state.transferCrossed = false;
   showScreen('screen-home');
 }
 </script>
