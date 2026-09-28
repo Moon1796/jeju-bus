@@ -670,19 +670,45 @@ function busIcon(){
 /* ============================================================
    지도
    ============================================================ */
+var BUS_COLORS = ['#0D7F84', '#1B6FCB', '#7C5CBF', '#C1490C'];
+
 function drawRouteOnMap(map, route){
   var bounds = new kakao.maps.LatLngBounds();
-  route.steps.forEach(function(step){
+  var steps = route.steps;
+  var busLegIndex = 0;
+  steps.forEach(function(step, i){
     var pts = step.path && step.path.points;
     if(!pts || !pts.length) return;
     var path = pts.map(function(pt){ return new kakao.maps.LatLng(pt[1], pt[0]); });
     path.forEach(function(ll){ bounds.extend(ll); });
     var isWalk = step.properties.type === 'WALKING';
+    var isTransferWalk = isWalk && i > 0 && i < steps.length - 1;
+
+    var color, weight, dashStyle;
+    if(isTransferWalk){
+      color = '#E8622C'; weight = 4; dashStyle = 'shortdash';
+    } else if(isWalk){
+      color = '#8FB9AE'; weight = 4; dashStyle = 'shortdash';
+    } else {
+      color = BUS_COLORS[busLegIndex % BUS_COLORS.length];
+      weight = 5; dashStyle = 'solid';
+      busLegIndex++;
+    }
+
     new kakao.maps.Polyline({
-      map: map, path: path, strokeWeight: isWalk?4:5,
-      strokeColor: isWalk ? '#8FB9AE' : '#0D7F84',
-      strokeOpacity: 0.9, strokeStyle: isWalk ? 'shortdash' : 'solid'
+      map: map, path: path, strokeWeight: weight,
+      strokeColor: color, strokeOpacity: 0.9, strokeStyle: dashStyle
     });
+
+    if(isTransferWalk){
+      var transferOverlay = new kakao.maps.CustomOverlay({
+        position: path[0],
+        content: '<div style="background:#E8622C;color:#fff;font-size:11px;font-weight:800;padding:4px 9px;border-radius:999px;box-shadow:0 1px 4px rgba(18,24,29,0.3);white-space:nowrap;">환승</div>',
+        yAnchor: 1.9,
+        zIndex: 8
+      });
+      transferOverlay.setMap(map);
+    }
   });
   if(state.origin){
     new kakao.maps.Marker({ map: map, position: new kakao.maps.LatLng(state.origin.lat, state.origin.lng) });
@@ -773,7 +799,10 @@ function onGuidePosition(pos){
   var cur = { lat: pos.coords.latitude, lng: pos.coords.longitude };
   var ll = new kakao.maps.LatLng(cur.lat, cur.lng);
   if(!state.guideMarker){
-    state.guideMarker = new kakao.maps.Marker({ map: state.guideMap, position: ll, zIndex: 10 });
+    state.guideMarker = new kakao.maps.CustomOverlay({
+      map: state.guideMap, position: ll, zIndex: 10, yAnchor: 0.5,
+      content: '<div style="width:32px;height:32px;border-radius:999px;background:#0D7F84;border:3px solid #FFFFFF;box-shadow:0 2px 6px rgba(18,24,29,0.35);display:flex;align-items:center;justify-content:center;">' + busIcon() + '</div>'
+    });
   } else {
     state.guideMarker.setPosition(ll);
   }
